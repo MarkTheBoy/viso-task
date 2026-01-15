@@ -8,3 +8,12 @@ build/
 *.db
 timesheet.db
 .git/
+package-lock.json
+package-lock.json
+tsconfig.json
+vite.config.ts
+next.config.js
+.vscode/
+.idea/
+*.log
+
