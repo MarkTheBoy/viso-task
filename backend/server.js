@@ -1,30 +1,14 @@
 
 import express from 'express';
 import cors from 'cors';
-import sqlite3 from 'sqlite3';
+import { PrismaClient } from '@prisma/client';
 
 const app = express();
 const PORT = 3001;
+const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
-
-// Database setup
-const db = new sqlite3.Database('./timesheet.db', (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-  } else {
-    console.log('Connected to SQLite database');
-    db.run(`CREATE TABLE IF NOT EXISTS entries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      project TEXT NOT NULL,
-      hours REAL NOT NULL,
-      description TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-  }
-});
 
 // Root route
 app.get('/', (req, res) => {
@@ -32,18 +16,19 @@ app.get('/', (req, res) => {
 });
 
 // Get all entries
-app.get('/api/entries', (req, res) => {
-  db.all('SELECT * FROM entries ORDER BY date DESC', [], (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json(rows);
-  });
+app.get('/api/entries', async (req, res) => {
+  try {
+    const entries = await prisma.entry.findMany({
+      orderBy: { date: 'desc' }
+    });
+    res.json(entries);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Add new entry
-app.post('/api/entries', (req, res) => {
+app.post('/api/entries', async (req, res) => {
   const { date, project, hours, description } = req.body;
   
   if (!date || !project || !hours || !description) {
@@ -57,14 +42,14 @@ app.post('/api/entries', (req, res) => {
     return;
   }
 
-  // Check total hours for the date
-  db.get('SELECT SUM(hours) as totalHours FROM entries WHERE date = ?', [date], (err, row) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-
-    const currentTotal = row?.totalHours || 0;
+  try {
+    // Check total hours for the date
+    const dayEntries = await prisma.entry.findMany({
+      where: { date }
+    });
+    
+    const currentTotal = dayEntries.reduce((sum, entry) => sum + entry.hours, 0);
+    
     if (currentTotal + numHours > 24) {
       res.status(400).json({ 
         error: `Cannot add ${numHours}h. Maximum 24 hours per day. Current: ${currentTotal}h, Available: ${24 - currentTotal}h` 
@@ -72,31 +57,33 @@ app.post('/api/entries', (req, res) => {
       return;
     }
 
-    db.run(
-      'INSERT INTO entries (date, project, hours, description) VALUES (?, ?, ?, ?)',
-      [date, project, numHours, description],
-      function(err) {
-        if (err) {
-          res.status(500).json({ error: err.message });
-          return;
-        }
-        res.json({ id: this.lastID, date, project, hours: numHours, description });
+    const entry = await prisma.entry.create({
+      data: {
+        date,
+        project,
+        hours: numHours,
+        description
       }
-    );
-  });
+    });
+    
+    res.json(entry);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Delete entry
-app.delete('/api/entries/:id', (req, res) => {
+app.delete('/api/entries/:id', async (req, res) => {
   const { id } = req.params;
   
-  db.run('DELETE FROM entries WHERE id = ?', [id], function(err) {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.json({ deleted: this.changes });
-  });
+  try {
+    await prisma.entry.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ deleted: 1 });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(PORT, () => {
