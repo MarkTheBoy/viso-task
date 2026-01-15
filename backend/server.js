@@ -51,17 +51,39 @@ app.post('/api/entries', (req, res) => {
     return;
   }
 
-  db.run(
-    'INSERT INTO entries (date, project, hours, description) VALUES (?, ?, ?, ?)',
-    [date, project, hours, description],
-    function(err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.json({ id: this.lastID, date, project, hours, description });
+  const numHours = parseFloat(hours);
+  if (numHours <= 0) {
+    res.status(400).json({ error: 'Hours must be a positive number' });
+    return;
+  }
+
+  // Check total hours for the date
+  db.get('SELECT SUM(hours) as totalHours FROM entries WHERE date = ?', [date], (err, row) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
     }
-  );
+
+    const currentTotal = row?.totalHours || 0;
+    if (currentTotal + numHours > 24) {
+      res.status(400).json({ 
+        error: `Cannot add ${numHours}h. Maximum 24 hours per day. Current: ${currentTotal}h, Available: ${24 - currentTotal}h` 
+      });
+      return;
+    }
+
+    db.run(
+      'INSERT INTO entries (date, project, hours, description) VALUES (?, ?, ?, ?)',
+      [date, project, numHours, description],
+      function(err) {
+        if (err) {
+          res.status(500).json({ error: err.message });
+          return;
+        }
+        res.json({ id: this.lastID, date, project, hours: numHours, description });
+      }
+    );
+  });
 });
 
 // Delete entry
