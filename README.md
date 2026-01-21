@@ -1,3 +1,7 @@
+<img width="1903" height="908" alt="image" src="https://github.com/user-attachments/assets/9f2a9db9-2d06-4ff3-a636-cbcadfe2d332" />
+<img width="1898" height="913" alt="image" src="https://github.com/user-attachments/assets/52b7864d-bc9e-4178-a3be-8b6e47e7d6c8" />
+
+
 # Timesheet App
 
 A full-stack timesheet application for tracking work hours across projects with validation and persistence.
